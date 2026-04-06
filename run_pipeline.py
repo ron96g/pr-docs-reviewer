@@ -75,11 +75,12 @@ async def main():
     else:
         status = "success"
 
-    # Write outputs
+    # Write outputs using heredoc delimiters for values that may contain
+    # newlines.  GitHub Actions requires: name<<DELIMITER\nvalue\nDELIMITER\n
+    if isinstance(suggestions, list):
+        suggestions = json.dumps(suggestions)
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-        if isinstance(suggestions, list):
-            suggestions = json.dumps(suggestions)
-        f.write(f"suggestions={suggestions}\n")
+        f.write(f"suggestions<<__SUGGESTIONS_EOF__\n{suggestions}\n__SUGGESTIONS_EOF__\n")
         f.write(f"doc_pr_url={doc_pr_url}\n")
         f.write(f"status={status}\n")
 

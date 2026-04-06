@@ -333,7 +333,15 @@ class TestCreateBranch:
             mock_run.return_value = MagicMock(returncode=0)
             backend.create_branch("docs/update-for-pr-42", "abc123")
 
-        mock_run.assert_called_once_with(
+        assert mock_run.call_count == 2
+        # First call: delete stale remote branch (best-effort)
+        mock_run.assert_any_call(
+            ["git", "push", "origin", "--delete", "docs/update-for-pr-42"],
+            cwd=repo_root,
+            capture_output=True,
+        )
+        # Second call: create the local branch
+        mock_run.assert_any_call(
             ["git", "checkout", "-b", "docs/update-for-pr-42", "abc123"],
             cwd=repo_root,
             check=True,

@@ -220,6 +220,12 @@ class LocalBackend:
         return pr["head"]["ref"], pr["head"]["sha"]
 
     def create_branch(self, branch_name: str, sha: str) -> None:
+        # Delete stale remote branch from a previous run, if it exists.
+        subprocess.run(
+            ["git", "push", "origin", "--delete", branch_name],
+            cwd=self._root,
+            capture_output=True,  # ignore errors (branch may not exist)
+        )
         subprocess.run(
             ["git", "checkout", "-b", branch_name, sha],
             cwd=self._root,

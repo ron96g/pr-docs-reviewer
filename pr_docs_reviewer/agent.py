@@ -123,9 +123,9 @@ You are a code analyst. Your job is to understand the SEMANTIC meaning of
 code changes — not just which lines moved, but what the changes mean for
 users and documentation.
 
-The changed files from the PR are: {changed_files}
+The PR analysis (including changed files) is: {pr_summary}
 
-For each file in the changed files list:
+For each file in the PR analysis's files list:
 
 1. Use `read_file_contents` to read the current version of the file.
 2. Use `get_function_signatures` to extract all function/class signatures.
@@ -172,8 +172,7 @@ code_mapper = Agent(
 DOC_FINDER_INSTRUCTION = """\
 You find documentation that needs updating based on code changes.
 
-The PR summary is: {pr_summary}
-The changed files are: {changed_files}
+The PR summary (including changed files) is: {pr_summary}
 
 Follow this process:
 
@@ -382,7 +381,6 @@ If auto_apply is true:
      that were skipped.
 
 The approved suggestions are: {doc_suggestions}
-The source PR: {pr_url}
 """
 
 doc_applier = Agent(

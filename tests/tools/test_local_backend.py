@@ -130,7 +130,7 @@ class TestGetPrDiff:
             with patch.object(backend, "_git", return_value="fake diff output") as mock_git:
                 result = backend.get_pr_diff()
 
-        mock_git.assert_called_once_with("diff", "origin/main...feature-branch")
+        mock_git.assert_called_once_with("diff", "origin/main...HEAD")
         assert result == "fake diff output"
 
     def test_missing_base_ref_raises(self, repo_root):

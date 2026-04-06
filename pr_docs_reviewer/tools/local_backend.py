@@ -82,9 +82,14 @@ class LocalBackend:
         return f"origin/{base}"
 
     def _head_ref(self) -> str:
-        """Return the head ref string for git diff."""
-        head = os.environ.get("GITHUB_HEAD_REF", "")
-        return head if head else "HEAD"
+        """Return the head ref string for git diff.
+
+        Always returns "HEAD" because actions/checkout places us at the
+        correct commit already.  GITHUB_HEAD_REF is a bare branch name
+        (e.g. "feature/foo") which is not a valid local ref inside the
+        container — the checkout uses refs/pull/<n>/merge.
+        """
+        return "HEAD"
 
     # -- PR-level data -------------------------------------------------------
 

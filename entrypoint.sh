@@ -58,6 +58,15 @@ if ! git fetch origin "${GITHUB_BASE_REF}" --depth=1; then
     echo "::warning::Failed to fetch base branch '${GITHUB_BASE_REF}'. Diff computation may fail."
 fi
 
+# Debug: show git state so we can diagnose diff issues
+echo "--- Git debug info ---"
+echo "HEAD: $(git rev-parse HEAD)"
+echo "Branches: $(git branch -a)"
+echo "GITHUB_BASE_REF=${GITHUB_BASE_REF}"
+echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF:-}"
+echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+echo "--- End debug info ---"
+
 # -----------------------------------------------------------------------
 # Run the pipeline via the external driver script
 # -----------------------------------------------------------------------

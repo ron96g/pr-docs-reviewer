@@ -1,8 +1,12 @@
 """Apply approved documentation suggestions by creating a branch, committing
 changes, and opening a PR against the source PR's head branch.
 
-This tool is called by the ``doc_applier`` LlmAgent and delegates all
-Git/GitHub operations to the active :class:`RepoBackend`.
+Each suggestion now contains the complete updated file content produced by
+the ``doc_writer`` agent, so the apply logic is a simple file-write — no
+text-matching or replacement heuristics are needed.
+
+This tool is called deterministically from ``run_pipeline.py`` and delegates
+all Git/GitHub operations to the active :class:`RepoBackend`.
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Text replacement helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _strip_markdown_fences(text: str) -> str:
@@ -29,49 +33,8 @@ def _strip_markdown_fences(text: str) -> str:
     return stripped.strip()
 
 
-def _normalize_whitespace(text: str) -> str:
-    """Collapse all runs of whitespace into single spaces and strip."""
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _apply_replacement(
-    content: str,
-    current_text: str,
-    suggested_text: str,
-) -> str | None:
-    """Try to replace *current_text* with *suggested_text* in *content*.
-
-    Strategy:
-        1. Exact substring match.
-        2. Normalised whitespace match — both sides are collapsed before
-           comparison, but the replacement is inserted in place of the
-           original span so surrounding formatting is preserved.
-
-    Returns the updated content string, or ``None`` if neither strategy
-    could locate *current_text*.
-    """
-    # 1. Exact match
-    if current_text in content:
-        return content.replace(current_text, suggested_text, 1)
-
-    # 2. Normalised match — build a regex that treats any whitespace run
-    #    in current_text as ``\s+`` so we can locate it in the raw content.
-    norm_current = _normalize_whitespace(current_text)
-    if not norm_current:
-        return None
-
-    # Escape each non-whitespace token and join with \s+
-    tokens = norm_current.split()
-    pattern = r"\s+".join(re.escape(t) for t in tokens)
-    match = re.search(pattern, content)
-    if match:
-        return content[: match.start()] + suggested_text + content[match.end():]
-
-    return None
-
-
 # ---------------------------------------------------------------------------
-# Tool function
+# Core function
 # ---------------------------------------------------------------------------
 
 def apply_suggestions(
@@ -85,6 +48,17 @@ def apply_suggestions(
     ``ToolContext``.  It can be called directly from ``run_pipeline.py``
     for deterministic auto-apply, or indirectly via the thin
     ``apply_doc_updates`` wrapper when invoked as an ADK tool.
+
+    Each suggestion dict is expected to have the schema::
+
+        {
+            "doc_path": "<path>",
+            "changes_summary": "<what changed and why>",
+            "original_content": "<full original file>",
+            "suggested_content": "<full updated file>"
+        }
+
+    The ``suggested_content`` is written directly — no text-matching needed.
 
     Args:
         suggestions: List of suggestion dicts, a JSON string, or None.
@@ -153,7 +127,7 @@ def apply_suggestions(
         }
 
     # ------------------------------------------------------------------
-    # 3. Apply each suggestion
+    # 3. Apply each suggestion (one per doc file)
     # ------------------------------------------------------------------
     files_updated: list[str] = []
     skipped_suggestions: list[dict] = []
@@ -161,9 +135,7 @@ def apply_suggestions(
 
     for idx, suggestion in enumerate(suggestions):
         doc_path = suggestion.get("doc_path", "")
-        current_text = suggestion.get("current_text")
-        suggested_text = suggestion.get("suggested_text", "")
-        change_type = suggestion.get("change_type", "update_text")
+        suggested_content = suggestion.get("suggested_content", "")
 
         if not doc_path:
             skipped_suggestions.append({
@@ -172,47 +144,16 @@ def apply_suggestions(
             })
             continue
 
-        # Read current file content
-        try:
-            file_content = backend.read_file(doc_path, ref=branch_name)
-            logger.info(
-                "Read %s (%d chars) for suggestion %d",
-                doc_path, len(file_content), idx,
-            )
-        except FileNotFoundError:
+        if not suggested_content:
             skipped_suggestions.append({
                 "index": idx,
                 "doc_path": doc_path,
-                "reason": "file not found",
-            })
-            continue
-        except Exception as exc:
-            skipped_suggestions.append({
-                "index": idx,
-                "doc_path": doc_path,
-                "reason": f"read error: {exc}",
+                "reason": "missing suggested_content",
             })
             continue
 
-        # Apply the text change
-        if change_type in ("add_section", "add_note", "add_warning") or current_text is None:
-            # For additions, append at the end of the file
-            new_content = file_content.rstrip("\n") + "\n\n" + suggested_text + "\n"
-        else:
-            result = _apply_replacement(file_content, current_text, suggested_text)
-            if result is None:
-                logger.warning(
-                    "Suggestion %d: could not locate target text in %s. "
-                    "current_text[:80]=%r, file_content[:200]=%r",
-                    idx, doc_path, current_text[:80], file_content[:200],
-                )
-                skipped_suggestions.append({
-                    "index": idx,
-                    "doc_path": doc_path,
-                    "reason": "could not locate target text in file",
-                })
-                continue
-            new_content = result
+        # Ensure the file ends with exactly one trailing newline
+        new_content = suggested_content.rstrip("\n") + "\n"
 
         # Commit the change
         try:
@@ -254,8 +195,11 @@ def apply_suggestions(
         ]
         for s in suggestions:
             path = s.get("doc_path", "?")
-            rationale = s.get("rationale", "")
-            body_lines.append(f"- **{path}**: {rationale}")
+            summary = s.get("changes_summary", "").strip()
+            if summary:
+                body_lines.append(f"- **{path}**: {summary}")
+            else:
+                body_lines.append(f"- **{path}**: updated")
 
         if skipped_suggestions:
             body_lines.append("\n## Skipped suggestions\n")

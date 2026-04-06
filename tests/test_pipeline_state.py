@@ -508,11 +508,9 @@ async def test_doc_applier_calls_tool_when_auto_apply_true():
 
     suggestions = json.dumps([{
         "doc_path": "docs/api.md",
-        "section": "Timeout",
-        "change_type": "update_text",
-        "current_text": "The timeout defaults to 30 seconds.",
-        "suggested_text": "The timeout defaults to 30 seconds. You can also set max_retries.",
-        "rationale": "New parameter added.",
+        "changes_summary": "Added max_retries parameter documentation.",
+        "original_content": "# API\n\nThe timeout defaults to 30 seconds.\n",
+        "suggested_content": "# API\n\nThe timeout defaults to 30 seconds. You can also set max_retries.\n",
     }])
 
     async with InMemoryRunner(agent=pipeline, app_name="test") as runner:

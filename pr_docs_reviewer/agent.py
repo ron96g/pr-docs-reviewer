@@ -138,6 +138,30 @@ Classify each change's doc relevance:
 - "low": Cosmetic changes, internal refactoring
 - "none": No documentation impact
 
+CRITICAL — Exception analysis:
+- Distinguish between exceptions RAISED TO THE CALLER vs exceptions caught
+  internally. Only list exceptions the caller will actually see.
+- Example: if a function catches urllib.error.URLError and re-raises as
+  RetryError, the caller sees RetryError — NOT URLError or ConnectionError.
+- If a code change removes a previously-raised exception (e.g., ConnectionError
+  is now caught and converted to RetryError), note this explicitly as a
+  behavioral change.
+
+CRITICAL — Import paths:
+- Determine the ACTUAL Python import path for each public class/exception
+  by examining the module structure (file path + __init__.py exports).
+- Example: if RetryError is defined in src/example_lib/client.py, the import
+  path is "example_lib.client.RetryError" — NOT "example_lib.exceptions.RetryError"
+  unless it is re-exported from an exceptions module.
+
+CRITICAL — Parameter semantics:
+- Do not just repeat parameter names. Describe the PRECISE semantics.
+- For counts, clarify whether the value includes the initial attempt.
+  Example: if max_retries=3 means 3 total attempts (including the first),
+  state "3 total attempts (1 initial + 2 retries)". Read the loop logic
+  (e.g., `range(max_retries)`) to determine the exact meaning.
+- For multipliers/factors, give the formula and an example calculation.
+
 Output a JSON list:
 [
   {
@@ -146,9 +170,17 @@ Output a JSON list:
     "change_type": "<semantic change type>",
     "description": "<what changed and what it means>",
     "user_facing_impact": "high|medium|low|none",
-    "doc_relevance": "<why this does or doesn't need doc updates>"
+    "doc_relevance": "<why this does or doesn't need doc updates>",
+    "import_path": "<actual Python import path, e.g. 'example_lib.client.RetryError'>",
+    "exceptions_raised": ["<exceptions the caller will see — NOT internally caught ones>"],
+    "parameter_semantics": {
+      "<param_name>": "<precise meaning, e.g. 'total attempt count including initial request'>"
+    }
   }
 ]
+
+The last three fields (import_path, exceptions_raised, parameter_semantics)
+may be omitted for entries with user_facing_impact "none".
 
 Mark internal refactoring explicitly as user_facing_impact "none" so
 downstream agents can skip it.
@@ -229,45 +261,82 @@ research_phase = ParallelAgent(
 # ---------------------------------------------------------------------------
 
 DOC_WRITER_INSTRUCTION = """\
-You write concrete documentation update suggestions.
+You write concrete documentation updates by producing the COMPLETE updated
+file content for each doc file that needs changes.
 
 Inputs:
 - Code change analysis: {code_analysis}
 - Doc sections needing updates: {relevant_doc_sections}
 - Previous reviewer feedback (if revision): {reviewer_feedback?}
 
-For each relevant doc section:
+Process:
 
-1. Use `read_doc_file` to get the full context around the section — read the
-   entire doc file so you understand the tone, structure, and terminology.
-2. Match the existing documentation's writing style precisely.
-3. Determine the change type:
-   - "update_text": Modify existing description
-   - "add_section": Add a new section
-   - "add_example": Add a code example
-   - "update_code_sample": Fix an existing code sample
-   - "add_note": Add a note or tip
-   - "add_warning": Add a warning about breaking changes
-   - "remove_section": Remove a section for deleted features
-4. Write the suggested new or replacement text.
-5. Provide a clear rationale linking the suggestion to a specific code change.
+1. Group the relevant doc sections by file path. You will produce ONE output
+   entry per doc file, not per section.
+2. For each doc file:
+   a. Use `read_doc_file` to read the ENTIRE current file content.
+   b. Understand the existing tone, structure, heading hierarchy, and
+      terminology.
+   c. Apply ALL needed changes for this file — updates, additions, removals —
+      into a single complete rewrite of the file.
+   d. Place new sections in the LOGICAL location within the document (e.g.,
+      a retry configuration section should go near other configuration docs,
+      not appended at the end).
+   e. Provide a changes_summary listing what was changed and why.
+
+CRITICAL — Preserve unchanged content:
+- Copy all text that does NOT need updating exactly as-is, character for
+  character. Do NOT rephrase, reformat, or "improve" content that is not
+  related to the code changes.
+- The only differences between the original file and your suggested_content
+  should be the specific documentation updates required by the code changes.
+
+CRITICAL — Markdown formatting rules:
+- Always include a blank line BEFORE and AFTER headings (## , ### , etc.).
+- Always include a blank line after a list block before starting a new section.
+- Ensure every file ends with exactly one trailing newline character.
+- Use consistent indentation (spaces, not tabs) in code blocks.
+
+CRITICAL — Import paths and code examples:
+- When writing import statements in code examples, use the import_path field
+  from the code_analysis — NEVER copy import paths from existing docs without
+  verifying them against code_analysis.
+- Example: if code_analysis says import_path is "example_lib.client.RetryError",
+  write `from example_lib.client import RetryError`, NOT
+  `from example_lib.exceptions import RetryError` even if existing docs say that.
+
+CRITICAL — Exception documentation:
+- ONLY document exceptions listed in the exceptions_raised field from
+  code_analysis. Do NOT document exceptions that are caught internally
+  and never seen by the caller.
+- If existing docs mention an exception that is NOT in exceptions_raised,
+  that is a documentation error — remove or correct it.
+
+CRITICAL — Parameter precision:
+- Use the parameter_semantics field from code_analysis to describe parameters
+  accurately. Do not guess or infer semantics from parameter names alone.
+- For retry counts, clearly state whether the value means "total attempts"
+  or "retries after the initial attempt". Get this from code_analysis.
+
+CRITICAL — Spelling and grammar:
+- Use standard English spelling: "flaky" not "flakey", "color" not "colour"
+  (unless the codebase consistently uses British spelling).
+- Proofread placeholder paths and variable names in code examples.
 
 If reviewer_feedback is present, this is a REVISION. You MUST address every
 point in the feedback. Do not ignore any feedback item. If you disagree with
-feedback, explain why in the rationale.
+feedback, explain why in the changes_summary.
 
 If the relevant_doc_sections list is empty, report "No documentation updates
 needed" with a brief explanation.
 
-Output a JSON list:
+Output a JSON list with ONE entry per doc file:
 [
   {
-    "doc_path": "<path>",
-    "section": "<section heading>",
-    "change_type": "<type from above>",
-    "current_text": "<the text that exists now (or null for new sections)>",
-    "suggested_text": "<your suggested replacement or new text>",
-    "rationale": "<why this change is needed, linked to specific code change>"
+    "doc_path": "<path to doc file>",
+    "changes_summary": "<bullet list of what changed and why>",
+    "original_content": "<the complete original file content as read>",
+    "suggested_content": "<the complete updated file content>"
   }
 ]
 """
@@ -289,12 +358,13 @@ QUALITY_REVIEWER_INSTRUCTION = """\
 You are a documentation quality reviewer. Your job is to evaluate doc update
 suggestions for accuracy, completeness, and quality.
 
-Evaluate the suggestions in {doc_suggestions} against the code changes in
+Each suggestion in {doc_suggestions} now contains the COMPLETE original and
+suggested file content. Evaluate them against the code changes in
 {code_analysis} and the original doc sections in {relevant_doc_sections}.
 
 Apply these criteria strictly:
 
-1. ACCURACY: Do suggestions correctly reflect the code changes? Cross-check:
+1. ACCURACY: Do the changes correctly reflect the code changes? Cross-check:
    - Parameter names and types match the code analysis
    - Default values are correct
    - Behavioral descriptions match what the code actually does
@@ -302,20 +372,68 @@ Apply these criteria strictly:
    This is the MOST IMPORTANT criterion. Inaccurate docs are worse than
    missing docs.
 
-2. COMPLETENESS: Are all relevant doc sections addressed? Check if there are
+   IMPORT PATH VALIDATION: If the suggested content contains import statements
+   or references to module paths (e.g., `from foo.bar import Baz`), verify
+   them against the import_path field in code_analysis. REJECT any suggestion
+   that uses an import path not confirmed by code_analysis. This is a common
+   source of errors — LLMs often invent plausible-sounding but wrong import
+   paths (e.g., "example_lib.exceptions" when the real path is
+   "example_lib.client").
+
+   EXCEPTION VALIDATION: If the suggested content documents exceptions, verify
+   them against the exceptions_raised field in code_analysis. REJECT any
+   suggestion that documents an exception the code does not raise to the
+   caller. Pay special attention to exceptions that are caught internally and
+   converted to different exception types (e.g., ConnectionError caught and
+   re-raised as RetryError).
+
+   PARAMETER SEMANTICS: If the suggested content describes a parameter
+   (especially counts, limits, or factors), verify the description matches
+   the parameter_semantics field in code_analysis. REJECT descriptions with
+   off-by-one errors (e.g., saying "retry attempts" when the parameter
+   means "total attempts including the initial request").
+
+2. NO UNINTENDED CHANGES: Compare original_content to suggested_content.
+   The ONLY differences should be the specific documentation updates required
+   by the code changes. REJECT if the writer has:
+   - Rephrased or reformatted text that was not related to the code changes
+   - Removed content that should still be present
+   - Changed heading levels, list formatting, or structure unnecessarily
+   - Added content not related to the code changes
+   This criterion catches LLM tendency to "improve" unrelated text.
+
+3. COMPLETENESS: Are all relevant doc sections addressed? Check if there are
    code changes with user_facing_impact "high" or "medium" in the code
-   analysis that have no corresponding doc suggestion.
+   analysis that have no corresponding update in any suggested_content.
 
-3. TONE & STYLE: Does the suggested text match the existing documentation's
-   voice, formatting conventions, and terminology? Check the
-   current_content_snippet for reference.
+4. TONE & STYLE: Does the updated text match the existing documentation's
+   voice, formatting conventions, and terminology?
 
-4. SPECIFICITY: Are suggestions concrete and actionable? Vague suggestions
-   like "update the docs to reflect changes" are NOT acceptable. Every
-   suggestion must include actual replacement text.
+5. SPECIFICITY: Are changes concrete? The suggested_content must be a
+   complete, ready-to-commit file — not placeholders or TODOs.
 
-5. CONCISENESS: Is the suggested text appropriately scoped? It should cover
-   what changed without over-explaining or adding unnecessary padding.
+6. CONCISENESS: Are the added/changed sections appropriately scoped? They
+   should cover what changed without over-explaining or adding unnecessary
+   padding.
+
+7. MARKDOWN FORMATTING: Check that suggested_content follows proper Markdown:
+   - Blank line before and after every heading (##, ###, etc.)
+   - Blank line after a list block before a new section
+   - Consistent indentation in code blocks
+   - No trailing whitespace on lines
+   - File ends with a single trailing newline
+
+8. SPELLING & GRAMMAR: Flag obvious typos or non-standard spellings
+   (e.g., "flakey" should be "flaky").
+
+9. CHANGES_SUMMARY: Every suggestion MUST have a non-empty changes_summary
+   that explains what was changed and why. REJECT any suggestion with an
+   empty or missing changes_summary.
+
+10. SECTION PLACEMENT: For new sections, verify they are placed in a logical
+    location within the document — not just appended at the end. A retry
+    configuration section should be near other configuration docs, error
+    handling examples near other usage examples, etc.
 
 Decision:
 - If ALL suggestions pass ALL criteria: call the `approve_suggestions` tool

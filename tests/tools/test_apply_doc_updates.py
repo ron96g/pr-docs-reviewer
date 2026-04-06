@@ -1,4 +1,9 @@
-"""Tests for apply_doc_updates tool — mocks at the backend level via set_backend."""
+"""Tests for apply_doc_updates tool — mocks at the backend level via set_backend.
+
+The doc_writer agent now produces full file content per suggestion (one entry
+per doc file with ``suggested_content`` containing the complete updated file).
+The apply logic simply writes ``suggested_content`` — no text-matching needed.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,6 @@ from pr_docs_reviewer.tools.backend import reset_backend, set_backend
 from pr_docs_reviewer.tools.apply_doc_updates import (
     apply_doc_updates,
     apply_suggestions,
-    _apply_replacement,
 )
 
 
@@ -33,10 +37,14 @@ def mock_backend():
         "number": 456,
         "html_url": "https://github.com/acme/widgets/pull/456",
     }
-    backend.read_file.return_value = (
-        "# API\n\nThe timeout defaults to 30 seconds.\n\n## Config\n"
-    )
     return backend
+
+
+ORIGINAL_CONTENT = "# API\n\nThe timeout defaults to 30 seconds.\n\n## Config\n"
+SUGGESTED_CONTENT = (
+    "# API\n\nThe timeout defaults to 30 seconds. "
+    "You can also configure max_retries (default: 3).\n\n## Config\n"
+)
 
 
 @pytest.fixture
@@ -45,11 +53,9 @@ def sample_suggestions():
     return [
         {
             "doc_path": "docs/api.md",
-            "section": "Client Configuration",
-            "change_type": "update_text",
-            "current_text": "The timeout defaults to 30 seconds.",
-            "suggested_text": "The timeout defaults to 30 seconds. You can also configure max_retries (default: 3).",
-            "rationale": "New max_retries parameter added.",
+            "changes_summary": "Added max_retries parameter documentation.",
+            "original_content": ORIGINAL_CONTENT,
+            "suggested_content": SUGGESTED_CONTENT,
         },
     ]
 
@@ -61,11 +67,9 @@ def tool_context():
         "doc_suggestions": [
             {
                 "doc_path": "docs/api.md",
-                "section": "Client Configuration",
-                "change_type": "update_text",
-                "current_text": "The timeout defaults to 30 seconds.",
-                "suggested_text": "The timeout defaults to 30 seconds. You can also configure max_retries (default: 3).",
-                "rationale": "New max_retries parameter added.",
+                "changes_summary": "Added max_retries parameter documentation.",
+                "original_content": ORIGINAL_CONTENT,
+                "suggested_content": SUGGESTED_CONTENT,
             },
         ],
         "repo": "acme/widgets",
@@ -77,7 +81,7 @@ def tool_context():
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Tests — basic integration via tool_context
 # ---------------------------------------------------------------------------
 
 
@@ -113,7 +117,7 @@ class TestCreatesBranchFromPrHead:
 
 class TestWritesFileContent:
 
-    def test_writes_file_content(self, mock_backend, tool_context):
+    def test_writes_full_suggested_content(self, mock_backend, tool_context):
         set_backend(mock_backend)
         apply_doc_updates(tool_context)
 
@@ -123,6 +127,15 @@ class TestWritesFileContent:
         assert "max_retries" in call_kwargs[1]["content"]
         assert call_kwargs[1]["branch"] == "docs/update-for-pr-42"
         assert "PR #42" in call_kwargs[1]["message"]
+
+    def test_writes_suggested_content_directly(self, mock_backend, sample_suggestions):
+        """The written content should be the suggested_content (with trailing newline)."""
+        set_backend(mock_backend)
+        apply_suggestions(suggestions=sample_suggestions, pr_number=42)
+
+        written_content = mock_backend.write_file.call_args[1]["content"]
+        expected = SUGGESTED_CONTENT.rstrip("\n") + "\n"
+        assert written_content == expected
 
 
 class TestCreatesPrWithCorrectBase:
@@ -139,47 +152,41 @@ class TestCreatesPrWithCorrectBase:
         assert result["doc_pr_number"] == 456
 
 
-class TestTextReplacementExact:
+class TestSkipsMissingSuggestedContent:
 
-    def test_exact_match(self):
-        content = "# API\n\nThe timeout defaults to 30 seconds.\n\n## Config\n"
-        result = _apply_replacement(
-            content,
-            "The timeout defaults to 30 seconds.",
-            "The timeout defaults to 30 seconds. Also max_retries.",
-        )
-        assert result is not None
-        assert "Also max_retries." in result
-        assert "# API" in result  # surrounding content preserved
-
-
-class TestTextReplacementNormalized:
-
-    def test_normalized_whitespace_match(self):
-        # Content has extra internal whitespace compared to current_text
-        content = "The  timeout   defaults  to  30  seconds."
-        result = _apply_replacement(
-            content,
-            "The timeout defaults to 30 seconds.",
-            "New text here.",
-        )
-        assert result is not None
-        assert "New text here." in result
-
-
-class TestSkipsUnfoundText:
-
-    def test_skips_unfound_text(self, mock_backend, tool_context):
+    def test_skips_when_suggested_content_empty(self, mock_backend):
         set_backend(mock_backend)
-        # Make the file content not contain the expected text
-        mock_backend.read_file.return_value = "# API\n\nSomething completely different.\n"
-
-        result = apply_doc_updates(tool_context)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "Something",
+                "original_content": ORIGINAL_CONTENT,
+                "suggested_content": "",
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
 
         assert result["status"] == "success"
         assert result["commit_count"] == 0
         assert len(result["skipped_suggestions"]) == 1
-        assert "could not locate" in result["skipped_suggestions"][0]["reason"]
+        assert "missing suggested_content" in result["skipped_suggestions"][0]["reason"]
+
+    def test_skips_when_suggested_content_missing(self, mock_backend):
+        set_backend(mock_backend)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "Something",
+                "original_content": ORIGINAL_CONTENT,
+                # no suggested_content key
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        assert result["commit_count"] == 0
+        assert len(result["skipped_suggestions"]) == 1
+        assert "missing suggested_content" in result["skipped_suggestions"][0]["reason"]
 
 
 class TestHandlesBranchExists:
@@ -236,16 +243,16 @@ class TestHandlesBackendError:
         assert result["status"] == "error"
         assert "Failed to get PR head ref" in result["error_message"]
 
-    def test_backend_error_on_read_file(self, mock_backend, tool_context):
+    def test_backend_error_on_write_file(self, mock_backend, tool_context):
         set_backend(mock_backend)
-        mock_backend.read_file.side_effect = FileNotFoundError("docs/api.md not found")
+        mock_backend.write_file.side_effect = RuntimeError("disk full")
 
         result = apply_doc_updates(tool_context)
 
         assert result["status"] == "success"
         assert result["commit_count"] == 0
         assert len(result["skipped_suggestions"]) == 1
-        assert "file not found" in result["skipped_suggestions"][0]["reason"]
+        assert "write error" in result["skipped_suggestions"][0]["reason"]
 
 
 # ===========================================================================
@@ -362,9 +369,6 @@ class TestApplySuggestionsMatchesToolWrapper:
         set_backend(mock_backend)
         mock_backend.reset_mock()
         mock_backend.get_pr_head_ref.return_value = ("feature/add-retry", "abc123def456")
-        mock_backend.read_file.return_value = (
-            "# API\n\nThe timeout defaults to 30 seconds.\n\n## Config\n"
-        )
         mock_backend.create_pull_request.return_value = {
             "number": 456,
             "html_url": "https://github.com/acme/widgets/pull/456",
@@ -380,3 +384,192 @@ class TestApplySuggestionsMatchesToolWrapper:
         assert tool_result["files_updated"] == standalone_result["files_updated"]
         assert tool_result["commit_count"] == standalone_result["commit_count"]
         assert tool_result["doc_pr_url"] == standalone_result["doc_pr_url"]
+
+
+class TestMultipleFiles:
+    """Test suggestions for multiple doc files in a single call."""
+
+    def test_commits_each_file_separately(self, mock_backend):
+        set_backend(mock_backend)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "Updated API docs.",
+                "original_content": "# API\nOld content.\n",
+                "suggested_content": "# API\nNew content.\n",
+            },
+            {
+                "doc_path": "docs/getting-started.md",
+                "changes_summary": "Updated getting started.",
+                "original_content": "# Getting Started\nOld guide.\n",
+                "suggested_content": "# Getting Started\nNew guide.\n",
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        assert result["commit_count"] == 2
+        assert result["files_updated"] == ["docs/api.md", "docs/getting-started.md"]
+        assert mock_backend.write_file.call_count == 2
+
+    def test_partial_failure_continues(self, mock_backend):
+        """If one file fails to write, the other should still succeed."""
+        set_backend(mock_backend)
+        mock_backend.write_file.side_effect = [
+            RuntimeError("disk full"),  # first file fails
+            None,                       # second file succeeds
+        ]
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "Updated API.",
+                "original_content": "old",
+                "suggested_content": "new",
+            },
+            {
+                "doc_path": "docs/guide.md",
+                "changes_summary": "Updated guide.",
+                "original_content": "old",
+                "suggested_content": "new",
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        assert result["commit_count"] == 1
+        assert result["files_updated"] == ["docs/guide.md"]
+        assert len(result["skipped_suggestions"]) == 1
+        assert result["skipped_suggestions"][0]["doc_path"] == "docs/api.md"
+
+
+# ===========================================================================
+# Tests for trailing newline at EOF
+# ===========================================================================
+
+
+class TestTrailingNewlineAtEOF:
+    """Ensure written content always ends with exactly one trailing newline."""
+
+    def test_adds_trailing_newline_when_missing(self, mock_backend, sample_suggestions):
+        """If suggested_content lacks trailing newline, one is added."""
+        set_backend(mock_backend)
+        sample_suggestions[0]["suggested_content"] = "# API\n\nNew content."
+        result = apply_suggestions(
+            suggestions=sample_suggestions,
+            pr_number=42,
+        )
+
+        assert result["status"] == "success"
+        written_content = mock_backend.write_file.call_args[1]["content"]
+        assert written_content.endswith("\n"), "Content must end with a trailing newline"
+        assert not written_content.endswith("\n\n"), "Content must not end with multiple newlines"
+
+    def test_does_not_double_trailing_newline(self, mock_backend, sample_suggestions):
+        """If suggested_content already ends with \\n, don't add another."""
+        set_backend(mock_backend)
+        sample_suggestions[0]["suggested_content"] = "# API\n\nNew content.\n"
+        result = apply_suggestions(
+            suggestions=sample_suggestions,
+            pr_number=42,
+        )
+
+        assert result["status"] == "success"
+        written_content = mock_backend.write_file.call_args[1]["content"]
+        assert written_content == "# API\n\nNew content.\n"
+
+    def test_collapses_multiple_trailing_newlines(self, mock_backend, sample_suggestions):
+        """Multiple trailing newlines should be collapsed to one."""
+        set_backend(mock_backend)
+        sample_suggestions[0]["suggested_content"] = "# API\n\nNew content.\n\n\n"
+        result = apply_suggestions(
+            suggestions=sample_suggestions,
+            pr_number=42,
+        )
+
+        assert result["status"] == "success"
+        written_content = mock_backend.write_file.call_args[1]["content"]
+        assert written_content == "# API\n\nNew content.\n"
+
+
+# ===========================================================================
+# Tests for PR body with empty/missing changes_summary
+# ===========================================================================
+
+
+class TestPRBodyChangesSummary:
+    """Ensure the PR body handles missing or empty changes_summary gracefully."""
+
+    def test_empty_summary_uses_fallback(self, mock_backend):
+        set_backend(mock_backend)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "",
+                "original_content": "old",
+                "suggested_content": "new",
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        pr_body = mock_backend.create_pull_request.call_args[1]["body"]
+        assert "- **docs/api.md**: updated" in pr_body
+
+    def test_missing_summary_uses_fallback(self, mock_backend):
+        set_backend(mock_backend)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "original_content": "old",
+                "suggested_content": "new",
+                # no changes_summary key
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        pr_body = mock_backend.create_pull_request.call_args[1]["body"]
+        assert "- **docs/api.md**: updated" in pr_body
+
+    def test_whitespace_only_summary_uses_fallback(self, mock_backend):
+        set_backend(mock_backend)
+        suggestions = [
+            {
+                "doc_path": "docs/api.md",
+                "changes_summary": "   ",
+                "original_content": "old",
+                "suggested_content": "new",
+            },
+        ]
+        result = apply_suggestions(suggestions=suggestions, pr_number=42)
+
+        assert result["status"] == "success"
+        pr_body = mock_backend.create_pull_request.call_args[1]["body"]
+        assert "- **docs/api.md**: updated" in pr_body
+
+    def test_present_summary_used_normally(self, mock_backend, sample_suggestions):
+        set_backend(mock_backend)
+        result = apply_suggestions(
+            suggestions=sample_suggestions,
+            pr_number=42,
+            repo="acme/widgets",
+        )
+
+        assert result["status"] == "success"
+        pr_body = mock_backend.create_pull_request.call_args[1]["body"]
+        assert "- **docs/api.md**: Added max_retries parameter documentation." in pr_body
+
+
+# ===========================================================================
+# Tests for no-read-file requirement
+# ===========================================================================
+
+
+class TestNoBackendReadRequired:
+    """The new schema writes suggested_content directly — no read_file calls."""
+
+    def test_does_not_call_read_file(self, mock_backend, sample_suggestions):
+        set_backend(mock_backend)
+        apply_suggestions(suggestions=sample_suggestions, pr_number=42)
+
+        mock_backend.read_file.assert_not_called()

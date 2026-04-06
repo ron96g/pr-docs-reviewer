@@ -57,11 +57,14 @@ git config --global user.name "pr-docs-reviewer[bot]"
 git config --global user.email "pr-docs-reviewer[bot]@users.noreply.github.com"
 
 # Configure git + gh authentication for push / PR creation.
-# actions/checkout sets an extraheader on the *host* runner, but Docker
-# container actions don't inherit it.  Re-configure using GITHUB_TOKEN.
+# actions/checkout sets an extraheader on the *host* runner's local git
+# config, which Docker container actions inherit via the workspace mount.
+# Only add our own if none is already configured.
 if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    git config --global http.https://github.com/.extraheader \
-        "Authorization: basic $(echo -n "x-access-token:${GITHUB_TOKEN}" | base64 -w0)"
+    if ! git config --get http.https://github.com/.extraheader >/dev/null 2>&1; then
+        git config --global http.https://github.com/.extraheader \
+            "Authorization: basic $(echo -n "x-access-token:${GITHUB_TOKEN}" | base64 -w0)"
+    fi
     export GH_TOKEN="${GITHUB_TOKEN}"
 fi
 

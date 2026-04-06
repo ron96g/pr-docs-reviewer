@@ -10,6 +10,7 @@ import os
 import sys
 
 from google.adk.runners import InMemoryRunner
+from google.genai import types
 
 from pr_docs_reviewer.agent import root_agent
 
@@ -29,7 +30,10 @@ async def main():
     async for event in runner.run_async(
         user_id="github-action",
         session_id=session.id,
-        new_message=f"Review this PR: {pr_url}",
+        new_message=types.Content(
+            role="user",
+            parts=[types.Part(text=f"Review this PR: {pr_url}")],
+        ),
     ):
         if event.content and event.content.parts:
             for part in event.content.parts:

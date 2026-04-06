@@ -1,0 +1,25 @@
+name: PR Documentation Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  review-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: your-org/pr-docs-reviewer@v1
+        with:
+          google_api_key: ${{ secrets.GOOGLE_API_KEY }}
+          # auto_apply: "true"
+          # model: "gemini-3-flash-preview"
+          # docs_path: "docs/"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

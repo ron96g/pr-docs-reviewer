@@ -1,0 +1,40 @@
+diff --git a/src/http/client.py b/src/http/client.py
+index abc1234..def5678 100644
+--- a/src/http/client.py
++++ b/src/http/client.py
+@@ -15,3 +15,4 @@ class Client:
+-    def __init__(self, base_url: str, timeout: int = 30):
++    def __init__(self, base_url: str, timeout: int = 30, max_retries: int = 3):
+         self.base_url = base_url
+         self.timeout = timeout
++        self.max_retries = max_retries
+diff --git a/src/http/pool.py b/src/http/pool.py
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/src/http/pool.py
+@@ -0,0 +1,10 @@
++"""Connection pool for HTTP clients."""
++
++class ConnectionPool:
++    def __init__(self, max_connections: int = 10):
++        self.max_connections = max_connections
++        self._pool = []
++
++    def acquire(self):
++        """Acquire a connection from the pool."""
++        pass
+diff --git a/src/http/legacy.py b/src/http/legacy.py
+deleted file mode 100644
+index 9876543..0000000
+--- a/src/http/legacy.py
++++ /dev/null
+@@ -1,8 +0,0 @@
+-"""Legacy HTTP client -- deprecated."""
+-
+-def old_request(url, method="GET"):
+-    """Make a request using the old API."""
+-    pass
+-
+-def old_connect(host):
+-    pass

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pr-docs-reviewer"
+version = "0.1.0"
+description = "Multi-agent PR documentation reviewer built on Google ADK"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = [
+    "google-adk>=1.28.0",
+    "google-genai>=1.70.0",
+    "httpx>=0.28.0",
+    "unidiff>=0.7.5",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pr_docs_reviewer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

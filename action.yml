@@ -1,0 +1,36 @@
+name: "PR Documentation Reviewer"
+description: "Analyzes pull requests for documentation impact and suggests concrete updates using a multi-agent AI pipeline."
+author: "your-org"
+
+branding:
+  icon: "book-open"
+  color: "blue"
+
+inputs:
+  google_api_key:
+    description: "Google AI API key for Gemini models"
+    required: true
+  auto_apply:
+    description: 'When "true", commits doc changes and opens a PR'
+    required: false
+    default: "false"
+  model:
+    description: "Override the Gemini model used by all agents"
+    required: false
+    default: "gemini-3-flash-preview"
+  docs_path:
+    description: "Path to the documentation directory in the repo"
+    required: false
+    default: "docs/"
+
+outputs:
+  suggestions:
+    description: "JSON array of documentation update suggestions"
+  doc_pr_url:
+    description: "URL of the created documentation PR (when auto_apply is enabled)"
+  status:
+    description: 'Result status: "success", "no_changes", or "error"'
+
+runs:
+  using: "docker"
+  image: "Dockerfile"

@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 # Text replacement helpers
 # ---------------------------------------------------------------------------
 
+def _strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences (```json ... ```) from LLM output."""
+    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    stripped = re.sub(r"\n?```\s*$", "", stripped)
+    return stripped.strip()
+
+
 def _normalize_whitespace(text: str) -> str:
     """Collapse all runs of whitespace into single spaces and strip."""
     return re.sub(r"\s+", " ", text).strip()
@@ -97,7 +104,7 @@ def apply_doc_updates(tool_context: ToolContext) -> dict:
     if isinstance(suggestions, str):
         import json
         try:
-            suggestions = json.loads(suggestions)
+            suggestions = json.loads(_strip_markdown_fences(suggestions))
         except (json.JSONDecodeError, TypeError):
             return {
                 "status": "error",

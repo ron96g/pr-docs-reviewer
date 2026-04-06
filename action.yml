@@ -33,4 +33,4 @@ outputs:
 
 runs:
   using: "docker"
-  image: "Dockerfile"
+  image: "docker://ghcr.io/ron96g/pr-docs-reviewer:latest"

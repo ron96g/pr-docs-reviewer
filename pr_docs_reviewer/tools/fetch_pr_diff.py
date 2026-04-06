@@ -12,8 +12,8 @@ import re
 from google.adk.tools import ToolContext
 from unidiff import PatchSet
 
-from .backend import get_backend
-from .github_client import parse_pr_url
+from shared.tools.backend import get_backend
+from shared.tools.github_client import parse_pr_url
 
 
 # ---------------------------------------------------------------------------

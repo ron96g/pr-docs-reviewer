@@ -87,7 +87,7 @@ async def main():
     # ------------------------------------------------------------------
     if auto_apply and parsed_suggestions:
         print(f"\nauto_apply is enabled — applying {len(parsed_suggestions)} suggestions...")
-        from pr_docs_reviewer.tools.apply_doc_updates import apply_suggestions
+        from shared.tools.apply_doc_updates import apply_suggestions
 
         apply_result = apply_suggestions(
             suggestions=parsed_suggestions,

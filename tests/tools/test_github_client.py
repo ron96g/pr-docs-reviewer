@@ -21,7 +21,7 @@ def _mock_response(*, status_code=200, json_data=None, text="", headers=None):
 
 @pytest.fixture(autouse=True)
 def _fake_token():
-    with patch("pr_docs_reviewer.tools.github_client._get_token", return_value="fake-token"):
+    with patch("shared.tools.github_client._get_token", return_value="fake-token"):
         yield
 
 
@@ -32,7 +32,7 @@ def _fake_token():
 
 class TestGithubPost:
 
-    @patch("pr_docs_reviewer.tools.github_client.httpx.post")
+    @patch("shared.tools.github_client.httpx.post")
     def test_success(self, mock_post):
         mock_post.return_value = _mock_response(
             status_code=201,
@@ -46,8 +46,8 @@ class TestGithubPost:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["json"] == {"ref": "refs/heads/new", "sha": "abc"}
 
-    @patch("pr_docs_reviewer.tools.github_client.time.sleep")
-    @patch("pr_docs_reviewer.tools.github_client.httpx.post")
+    @patch("shared.tools.github_client.time.sleep")
+    @patch("shared.tools.github_client.httpx.post")
     def test_rate_limit_retry(self, mock_post, mock_sleep):
         rate_limit_resp = _mock_response(
             status_code=429,
@@ -71,7 +71,7 @@ class TestGithubPost:
 
 class TestGithubPut:
 
-    @patch("pr_docs_reviewer.tools.github_client.httpx.put")
+    @patch("shared.tools.github_client.httpx.put")
     def test_success(self, mock_put):
         mock_put.return_value = _mock_response(
             status_code=200,
@@ -88,8 +88,8 @@ class TestGithubPut:
         call_kwargs = mock_put.call_args
         assert call_kwargs[1]["json"]["branch"] == "docs/fix"
 
-    @patch("pr_docs_reviewer.tools.github_client.time.sleep")
-    @patch("pr_docs_reviewer.tools.github_client.httpx.put")
+    @patch("shared.tools.github_client.time.sleep")
+    @patch("shared.tools.github_client.httpx.put")
     def test_rate_limit_retry(self, mock_put, mock_sleep):
         rate_limit_resp = _mock_response(
             status_code=403,

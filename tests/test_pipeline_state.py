@@ -369,7 +369,7 @@ async def test_changed_files_populated_by_fetch():
 @pytest.mark.asyncio
 async def test_doc_applier_skips_when_auto_apply_false():
     """When auto_apply is not set, doc_applier outputs a summary without calling tools."""
-    from pr_docs_reviewer.tools import apply_doc_updates
+    from pr_docs_reviewer.tools.apply_doc_updates import apply_doc_updates
 
     def applier_callback(*, callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse:
         agent_name = callback_context.agent_name
@@ -444,7 +444,7 @@ async def test_doc_applier_skips_when_auto_apply_false():
 @pytest.mark.asyncio
 async def test_doc_applier_calls_tool_when_auto_apply_true():
     """When auto_apply is true, doc_applier calls apply_doc_updates."""
-    from pr_docs_reviewer.tools import apply_doc_updates
+    from pr_docs_reviewer.tools.apply_doc_updates import apply_doc_updates
 
     call_count = {"n": 0}
 

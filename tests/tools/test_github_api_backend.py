@@ -70,7 +70,7 @@ class TestConfigure:
 
 class TestGetPrMetadata:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_returns_parsed_metadata(self, mock_get, backend):
         mock_get.return_value = _mock_response(json_data={
             "title": "Add feature X",
@@ -92,7 +92,7 @@ class TestGetPrMetadata:
             "repo": "acme/widgets",
         }
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_handles_null_body(self, mock_get, backend):
         mock_get.return_value = _mock_response(json_data={
             "title": "Fix",
@@ -104,7 +104,7 @@ class TestGetPrMetadata:
         meta = backend.get_pr_metadata()
         assert meta["body"] == ""
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_handles_missing_keys(self, mock_get, backend):
         mock_get.return_value = _mock_response(json_data={})
 
@@ -121,7 +121,7 @@ class TestGetPrMetadata:
 
 class TestGetPrDiff:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_returns_diff_text(self, mock_get, backend):
         diff_text = "diff --git a/foo.py b/foo.py\n+hello\n"
         mock_get.return_value = _mock_response(text=diff_text)
@@ -142,7 +142,7 @@ class TestGetPrDiff:
 
 class TestGetPrFiles:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_returns_file_list(self, mock_get, backend):
         files = [
             {"filename": "a.py", "status": "modified", "additions": 5, "deletions": 2},
@@ -157,7 +157,7 @@ class TestGetPrFiles:
         )
         assert result == files
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_empty_pr(self, mock_get, backend):
         mock_get.return_value = _mock_response(json_data=[])
         assert backend.get_pr_files() == []
@@ -170,7 +170,7 @@ class TestGetPrFiles:
 
 class TestReadFile:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_decodes_base64_content(self, mock_get, backend):
         content_b64 = base64.b64encode(b"print('hello')").decode()
         mock_get.return_value = _mock_response(
@@ -187,7 +187,7 @@ class TestReadFile:
         )
         assert result == "print('hello')"
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_default_ref_is_head(self, mock_get, backend):
         content_b64 = base64.b64encode(b"x = 1").decode()
         mock_get.return_value = _mock_response(
@@ -203,21 +203,21 @@ class TestReadFile:
             raw=True,
         )
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_file_not_found_raises(self, mock_get, backend):
         mock_get.return_value = _mock_response(status_code=404, text="Not Found")
 
         with pytest.raises(FileNotFoundError, match="File not found.*src/gone.py"):
             backend.read_file("src/gone.py")
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_server_error_raises(self, mock_get, backend):
         mock_get.return_value = _mock_response(status_code=500, text="Internal error")
 
         with pytest.raises(RuntimeError, match="GitHub API returned 500"):
             backend.read_file("x.py")
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_blob_fallback_for_large_files(self, mock_get, backend):
         """When content is None but git_url is present, fetch via Blobs API."""
         blob_content_b64 = base64.b64encode(b"large file content").decode()
@@ -253,7 +253,7 @@ class TestReadFile:
 
 class TestSearchCode:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_basic_search(self, mock_get, backend):
         mock_get.return_value = _mock_response(
             json_data={
@@ -283,7 +283,7 @@ class TestSearchCode:
         assert results[0]["path"] == "docs/setup.md"
         assert results[0]["text_matches"] == [{"fragment": "Run pip install ..."}]
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_search_with_path_prefix(self, mock_get, backend):
         mock_get.return_value = _mock_response(
             json_data={"items": []},
@@ -295,7 +295,7 @@ class TestSearchCode:
         call_params = mock_get.call_args[1]["params"]
         assert "path:src/" in call_params["q"]
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_search_with_per_page(self, mock_get, backend):
         mock_get.return_value = _mock_response(
             json_data={"items": []},
@@ -307,14 +307,14 @@ class TestSearchCode:
         call_params = mock_get.call_args[1]["params"]
         assert call_params["per_page"] == 5
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_search_non_200_returns_empty(self, mock_get, backend):
         mock_get.return_value = _mock_response(status_code=422, text="Validation failed")
 
         results = backend.search_code("whatever")
         assert results == []
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_search_no_text_matches(self, mock_get, backend):
         """Items without text_matches key still produce entries."""
         mock_get.return_value = _mock_response(
@@ -331,7 +331,7 @@ class TestSearchCode:
         assert results[0]["path"] == "README.md"
         assert results[0]["text_matches"] == []
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_search_multiple_results(self, mock_get, backend):
         mock_get.return_value = _mock_response(
             json_data={
@@ -356,7 +356,7 @@ class TestSearchCode:
 
 class TestGetPrHeadRef:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_returns_branch_and_sha(self, mock_get, backend):
         mock_get.return_value = _mock_response(json_data={
             "head": {
@@ -379,7 +379,7 @@ class TestGetPrHeadRef:
 
 class TestCreateBranch:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_post")
+    @patch("shared.tools.github_api_backend.github_post")
     def test_success(self, mock_post, backend):
         mock_post.return_value = _mock_response(status_code=201, json_data={})
 
@@ -390,7 +390,7 @@ class TestCreateBranch:
             json={"ref": "refs/heads/docs/update-for-pr-42", "sha": "abc123"},
         )
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_post")
+    @patch("shared.tools.github_api_backend.github_post")
     def test_branch_already_exists_raises(self, mock_post, backend):
         mock_post.return_value = _mock_response(status_code=422, text="Reference already exists")
 
@@ -405,8 +405,8 @@ class TestCreateBranch:
 
 class TestWriteFile:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_put")
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_put")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_update_existing_file(self, mock_get, mock_put, backend):
         """When the file exists, write_file fetches blob SHA and includes it."""
         import base64
@@ -438,8 +438,8 @@ class TestWriteFile:
         assert put_body["branch"] == "docs/update-for-pr-42"
         assert put_body["content"] == base64.b64encode(b"new content").decode()
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_put")
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_get")
+    @patch("shared.tools.github_api_backend.github_put")
+    @patch("shared.tools.github_api_backend.github_get")
     def test_create_new_file(self, mock_get, mock_put, backend):
         """When the file does not exist (404), write_file omits sha."""
         mock_get.return_value = _mock_response(status_code=404, text="Not Found")
@@ -464,7 +464,7 @@ class TestWriteFile:
 
 class TestCreatePullRequest:
 
-    @patch("pr_docs_reviewer.tools.github_api_backend.github_post")
+    @patch("shared.tools.github_api_backend.github_post")
     def test_creates_pr_and_returns_dict(self, mock_post, backend):
         mock_post.return_value = _mock_response(
             status_code=201,

@@ -19,14 +19,14 @@ import os
 from google.adk.agents import Agent, SequentialAgent, ParallelAgent, LoopAgent
 from google.adk.tools import ToolContext
 
-from .tools import (
-    fetch_pr_diff,
+from shared.tools import (
     read_file_contents,
     get_function_signatures,
     search_docs_by_keyword,
     search_docs_by_file_reference,
     read_doc_file,
 )
+from .tools import fetch_pr_diff
 
 
 # ---------------------------------------------------------------------------

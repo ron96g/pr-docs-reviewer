@@ -187,7 +187,7 @@ class TestGetFunctionSignaturesIntegration:
         mock_tool_context.state["repo"] = "owner/repo"
 
         with patch(
-            "pr_docs_reviewer.tools.get_function_signatures.read_file_contents"
+            "shared.tools.get_function_signatures.read_file_contents"
         ) as mock_read:
             mock_read.return_value = {
                 "status": "success",
@@ -208,7 +208,7 @@ class TestGetFunctionSignaturesIntegration:
         mock_tool_context.state["repo"] = "owner/repo"
 
         with patch(
-            "pr_docs_reviewer.tools.get_function_signatures.read_file_contents"
+            "shared.tools.get_function_signatures.read_file_contents"
         ) as mock_read:
             mock_read.return_value = {
                 "status": "error",

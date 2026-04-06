@@ -152,7 +152,7 @@ class TestReadDocFileIntegration:
         mock_tool_context.state["repo"] = "owner/repo"
 
         with patch(
-            "pr_docs_reviewer.tools.read_doc_file.read_file_contents"
+            "shared.tools.read_doc_file.read_file_contents"
         ) as mock_read:
             mock_read.return_value = {
                 "status": "success",
@@ -170,7 +170,7 @@ class TestReadDocFileIntegration:
         mock_tool_context.state["repo"] = "owner/repo"
 
         with patch(
-            "pr_docs_reviewer.tools.read_doc_file.read_file_contents"
+            "shared.tools.read_doc_file.read_file_contents"
         ) as mock_read:
             mock_read.return_value = {
                 "status": "error",

@@ -51,6 +51,19 @@ def _reset_backend():
     reset_backend()
 
 
+@pytest.fixture(autouse=True)
+def _force_api_mode(monkeypatch):
+    """Force API mode so tests don't depend on CI environment variables.
+
+    In GitHub Actions GITHUB_ACTIONS=true and GITHUB_REPOSITORY are set,
+    which causes _is_local_mode() to return True and changes the code path
+    under test.  Setting SOURCE_MODE=api ensures consistent behavior.
+    """
+    monkeypatch.setenv("SOURCE_MODE", "api")
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+
+
 class TestParsePrUrl:
     """Tests for the PR URL parser."""
 

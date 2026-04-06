@@ -250,12 +250,18 @@ class LocalBackend:
         self, title: str, body: str, head: str, base: str,
     ) -> dict:
         # Push the branch first
-        subprocess.run(
+        push = subprocess.run(
             ["git", "push", "origin", head],
             cwd=self._root,
-            check=True,
             capture_output=True,
+            text=True,
         )
+        if push.returncode != 0:
+            raise RuntimeError(
+                f"git push failed (rc={push.returncode}): "
+                f"{push.stderr.strip()}"
+            )
+
         # Use GitHub CLI (available in all GitHub Actions runners)
         result = subprocess.run(
             [
@@ -266,10 +272,15 @@ class LocalBackend:
                 "--base", base,
             ],
             cwd=self._root,
-            check=True,
             capture_output=True,
             text=True,
         )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gh pr create failed (rc={result.returncode}): "
+                f"{result.stderr.strip()}"
+            )
+
         # gh pr create prints the PR URL to stdout
         pr_url = result.stdout.strip()
         # Extract PR number from URL

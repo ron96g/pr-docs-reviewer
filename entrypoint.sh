@@ -56,6 +56,15 @@ git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 git config --global user.name "pr-docs-reviewer[bot]"
 git config --global user.email "pr-docs-reviewer[bot]@users.noreply.github.com"
 
+# Configure git + gh authentication for push / PR creation.
+# actions/checkout sets an extraheader on the *host* runner, but Docker
+# container actions don't inherit it.  Re-configure using GITHUB_TOKEN.
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    git config --global http.https://github.com/.extraheader \
+        "Authorization: basic $(echo -n "x-access-token:${GITHUB_TOKEN}" | base64 -w0)"
+    export GH_TOKEN="${GITHUB_TOKEN}"
+fi
+
 echo "Fetching base branch: ${GITHUB_BASE_REF}"
 if ! git fetch origin "${GITHUB_BASE_REF}" --depth=1; then
     echo "::warning::Failed to fetch base branch '${GITHUB_BASE_REF}'. Diff computation may fail."

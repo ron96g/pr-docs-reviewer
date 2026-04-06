@@ -6,7 +6,7 @@ from .get_function_signatures import get_function_signatures
 from .search_docs_by_keyword import search_docs_by_keyword
 from .search_docs_by_file_reference import search_docs_by_file_reference
 from .read_doc_file import read_doc_file
-from .apply_doc_updates import apply_doc_updates
+from .apply_doc_updates import apply_doc_updates, apply_suggestions
 
 __all__ = [
     "fetch_pr_diff",
@@ -16,4 +16,5 @@ __all__ = [
     "search_docs_by_file_reference",
     "read_doc_file",
     "apply_doc_updates",
+    "apply_suggestions",
 ]

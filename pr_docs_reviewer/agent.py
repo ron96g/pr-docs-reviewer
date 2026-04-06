@@ -26,7 +26,6 @@ from .tools import (
     search_docs_by_keyword,
     search_docs_by_file_reference,
     read_doc_file,
-    apply_doc_updates,
 )
 
 
@@ -40,7 +39,6 @@ MAPPER_MODEL = os.environ.get("PR_DOCS_MAPPER_MODEL", _DEFAULT_MODEL)
 FINDER_MODEL = os.environ.get("PR_DOCS_FINDER_MODEL", _DEFAULT_MODEL)
 WRITER_MODEL = os.environ.get("PR_DOCS_WRITER_MODEL", _DEFAULT_MODEL)
 REVIEWER_MODEL = os.environ.get("PR_DOCS_REVIEWER_MODEL", _DEFAULT_MODEL)
-APPLIER_MODEL = os.environ.get("PR_DOCS_APPLIER_MODEL", _DEFAULT_MODEL)
 
 
 # ---------------------------------------------------------------------------
@@ -362,48 +360,19 @@ refinement_loop = LoopAgent(
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Doc Applier (opt-in — only runs when auto_apply is set)
-# ---------------------------------------------------------------------------
-
-DOC_APPLIER_INSTRUCTION = """\
-You apply approved documentation suggestions.
-
-auto_apply = {auto_apply?}
-
-IMPORTANT — follow these rules exactly:
-
-1. If auto_apply is empty, "false", or "False":
-   Output a summary of the approved suggestions. List each doc file and
-   the changes that would be made. Do NOT call any tools.
-
-2. If auto_apply is "true", "True", or any truthy value:
-   You MUST call the `apply_doc_updates` tool exactly once.
-   Do NOT output a summary instead — you MUST call the tool.
-   After the tool returns, report the result: the new PR URL, files
-   updated, and any suggestions that were skipped.
-
-The approved suggestions are: {doc_suggestions}
-"""
-
-doc_applier = Agent(
-    name="doc_applier",
-    model=APPLIER_MODEL,
-    instruction=DOC_APPLIER_INSTRUCTION,
-    tools=[apply_doc_updates],
-    output_key="apply_result",
-)
-
-
-# ---------------------------------------------------------------------------
 # Top-Level Pipeline
 # ---------------------------------------------------------------------------
 
+# NOTE: auto_apply (creating a doc PR from suggestions) is handled
+# deterministically in run_pipeline.py after the pipeline completes,
+# rather than by an LLM agent.  This avoids the unreliability of relying
+# on an LLM to conditionally call a tool.
+
 root_agent = SequentialAgent(
     name="pr_docs_pipeline",
-    sub_agents=[pr_analyzer, research_phase, refinement_loop, doc_applier],
+    sub_agents=[pr_analyzer, research_phase, refinement_loop],
     description=(
         "Analyzes a GitHub PR, finds relevant documentation, and suggests "
-        "concrete documentation updates with iterative quality review. "
-        "Optionally applies changes as a PR when auto_apply is enabled."
+        "concrete documentation updates with iterative quality review."
     ),
 )

@@ -74,20 +74,27 @@ def _apply_replacement(
 # Tool function
 # ---------------------------------------------------------------------------
 
-def apply_doc_updates(tool_context: ToolContext) -> dict:
+def apply_suggestions(
+    suggestions: list[dict] | str | None,
+    pr_number: int | str | None,
+    repo: str = "",
+) -> dict:
     """Create a branch, commit doc changes, and open a PR.
 
-    Reads from session state:
-        doc_suggestions — list of approved suggestion dicts.
-        repo            — "owner/repo" string.
-        pr_number       — int.
-        pr_url          — str.
+    This is the standalone entry point that does not require an ADK
+    ``ToolContext``.  It can be called directly from ``run_pipeline.py``
+    for deterministic auto-apply, or indirectly via the thin
+    ``apply_doc_updates`` wrapper when invoked as an ADK tool.
 
-    Returns a result dict with status, PR URL, and details.
+    Args:
+        suggestions: List of suggestion dicts, a JSON string, or None.
+        pr_number: The source PR number.
+        repo: "owner/repo" string (informational only).
+
+    Returns:
+        A result dict with status, PR URL, and details.
     """
-    suggestions = tool_context.state.get("doc_suggestions")
-    pr_number = tool_context.state.get("pr_number")
-    repo = tool_context.state.get("repo", "")
+    import json as _json
 
     # ------------------------------------------------------------------
     # Guard: nothing to apply
@@ -102,10 +109,9 @@ def apply_doc_updates(tool_context: ToolContext) -> dict:
 
     # If suggestions is a string (LLM JSON output), try to parse
     if isinstance(suggestions, str):
-        import json
         try:
-            suggestions = json.loads(_strip_markdown_fences(suggestions))
-        except (json.JSONDecodeError, TypeError):
+            suggestions = _json.loads(_strip_markdown_fences(suggestions))
+        except (_json.JSONDecodeError, TypeError):
             return {
                 "status": "error",
                 "error_message": "doc_suggestions could not be parsed as JSON",
@@ -222,14 +228,14 @@ def apply_doc_updates(tool_context: ToolContext) -> dict:
     # 4. Open a PR (only if we committed at least one change)
     # ------------------------------------------------------------------
     if commit_count == 0:
-        result: dict = {
+        result_dict: dict = {
             "status": "success",
             "message": "All suggestions were skipped — no changes to commit",
             "files_updated": [],
             "commit_count": 0,
             "skipped_suggestions": skipped_suggestions,
         }
-        return result
+        return result_dict
 
     try:
         # Build PR body
@@ -276,3 +282,17 @@ def apply_doc_updates(tool_context: ToolContext) -> dict:
         "commit_count": commit_count,
         "skipped_suggestions": skipped_suggestions,
     }
+
+
+def apply_doc_updates(tool_context: ToolContext) -> dict:
+    """ADK tool wrapper — reads from session state and delegates to
+    :func:`apply_suggestions`.
+
+    This thin wrapper exists so the function can still be registered as an
+    ADK tool if needed in the future.
+    """
+    return apply_suggestions(
+        suggestions=tool_context.state.get("doc_suggestions"),
+        pr_number=tool_context.state.get("pr_number"),
+        repo=tool_context.state.get("repo", ""),
+    )

@@ -63,16 +63,6 @@ async def main():
     state = session.state or {}
     suggestions = state.get("doc_suggestions", "[]")
     doc_pr_url = ""
-    apply_result = state.get("apply_result", "")
-
-    if isinstance(apply_result, dict):
-        doc_pr_url = apply_result.get("doc_pr_url", "")
-    elif isinstance(apply_result, str):
-        try:
-            parsed = json.loads(_strip_markdown_fences(apply_result))
-            doc_pr_url = parsed.get("doc_pr_url", "")
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     # Determine status
     if isinstance(suggestions, str):
@@ -87,6 +77,29 @@ async def main():
         status = "no_changes"
     else:
         status = "success"
+
+    # ------------------------------------------------------------------
+    # Deterministic auto-apply: if enabled and we have suggestions, call
+    # apply_suggestions() directly — no LLM in the loop.
+    # ------------------------------------------------------------------
+    if auto_apply and parsed_suggestions:
+        print(f"\nauto_apply is enabled — applying {len(parsed_suggestions)} suggestions...")
+        from pr_docs_reviewer.tools.apply_doc_updates import apply_suggestions
+
+        apply_result = apply_suggestions(
+            suggestions=parsed_suggestions,
+            pr_number=state.get("pr_number"),
+            repo=state.get("repo", ""),
+        )
+        print(f"Apply result: status={apply_result.get('status')}, "
+              f"files_updated={apply_result.get('files_updated', [])}, "
+              f"commit_count={apply_result.get('commit_count', 0)}")
+
+        if apply_result.get("doc_pr_url"):
+            doc_pr_url = apply_result["doc_pr_url"]
+
+        if apply_result.get("error_message"):
+            print(f"::warning::auto_apply error: {apply_result['error_message']}")
 
     # Write outputs using heredoc delimiters for values that may contain
     # newlines.  GitHub Actions requires: name<<DELIMITER\nvalue\nDELIMITER\n

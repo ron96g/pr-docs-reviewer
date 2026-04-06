@@ -366,19 +366,21 @@ refinement_loop = LoopAgent(
 # ---------------------------------------------------------------------------
 
 DOC_APPLIER_INSTRUCTION = """\
-You apply approved documentation suggestions by creating a PR.
+You apply approved documentation suggestions.
 
-Check if auto_apply is enabled: {auto_apply?}
+auto_apply = {auto_apply?}
 
-If auto_apply is not set or is false:
-  Output a summary of the approved suggestions. List each doc file and
-  the changes that would be made. Do NOT call any tools.
+IMPORTANT — follow these rules exactly:
 
-If auto_apply is true:
-  1. Call `apply_doc_updates` to create a branch, commit the doc changes,
-     and open a PR against the source PR's branch.
-  2. Report the result: the new PR URL, files updated, and any suggestions
-     that were skipped.
+1. If auto_apply is empty, "false", or "False":
+   Output a summary of the approved suggestions. List each doc file and
+   the changes that would be made. Do NOT call any tools.
+
+2. If auto_apply is "true", "True", or any truthy value:
+   You MUST call the `apply_doc_updates` tool exactly once.
+   Do NOT output a summary instead — you MUST call the tool.
+   After the tool returns, report the result: the new PR URL, files
+   updated, and any suggestions that were skipped.
 
 The approved suggestions are: {doc_suggestions}
 """

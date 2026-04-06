@@ -36,7 +36,7 @@ async def main():
     session = await runner.session_service.create_session(
         app_name="pr-docs-reviewer",
         user_id="github-action",
-        state={"auto_apply": auto_apply},
+        state={"auto_apply": str(auto_apply).lower()},
     )
 
     final_text = ""

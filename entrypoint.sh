@@ -19,7 +19,6 @@ if [[ -n "${INPUT_MODEL:-}" ]]; then
     export PR_DOCS_FINDER_MODEL="${INPUT_MODEL}"
     export PR_DOCS_WRITER_MODEL="${INPUT_MODEL}"
     export PR_DOCS_REVIEWER_MODEL="${INPUT_MODEL}"
-    export PR_DOCS_APPLIER_MODEL="${INPUT_MODEL}"
 fi
 
 # Resolve docs path
@@ -52,6 +51,10 @@ cd "${GITHUB_WORKSPACE}"
 # Git 2.35.2+ rejects operations on repos owned by other users unless
 # the directory is explicitly marked as safe.
 git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+# Set git identity for doc-applier commits
+git config --global user.name "pr-docs-reviewer[bot]"
+git config --global user.email "pr-docs-reviewer[bot]@users.noreply.github.com"
 
 echo "Fetching base branch: ${GITHUB_BASE_REF}"
 if ! git fetch origin "${GITHUB_BASE_REF}" --depth=1; then

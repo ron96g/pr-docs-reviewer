@@ -7,12 +7,25 @@ writing results to GitHub Actions outputs.
 import asyncio
 import json
 import os
+import re
 import sys
 
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from pr_docs_reviewer.agent import root_agent
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences (```json ... ```) from LLM output.
+
+    LLMs frequently wrap JSON output in markdown code fences even when
+    instructed not to.  This helper removes the fences so the JSON can
+    be parsed.
+    """
+    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    stripped = re.sub(r"\n?```\s*$", "", stripped)
+    return stripped.strip()
 
 
 async def main():
@@ -56,7 +69,7 @@ async def main():
         doc_pr_url = apply_result.get("doc_pr_url", "")
     elif isinstance(apply_result, str):
         try:
-            parsed = json.loads(apply_result)
+            parsed = json.loads(_strip_markdown_fences(apply_result))
             doc_pr_url = parsed.get("doc_pr_url", "")
         except (json.JSONDecodeError, TypeError):
             pass
@@ -64,7 +77,7 @@ async def main():
     # Determine status
     if isinstance(suggestions, str):
         try:
-            parsed_suggestions = json.loads(suggestions)
+            parsed_suggestions = json.loads(_strip_markdown_fences(suggestions))
         except (json.JSONDecodeError, TypeError):
             parsed_suggestions = []
     else:
@@ -77,10 +90,10 @@ async def main():
 
     # Write outputs using heredoc delimiters for values that may contain
     # newlines.  GitHub Actions requires: name<<DELIMITER\nvalue\nDELIMITER\n
-    if isinstance(suggestions, list):
-        suggestions = json.dumps(suggestions)
+    # Always write clean JSON for the suggestions output, not the raw LLM text.
+    suggestions_json = json.dumps(parsed_suggestions) if parsed_suggestions else "[]"
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-        f.write(f"suggestions<<__SUGGESTIONS_EOF__\n{suggestions}\n__SUGGESTIONS_EOF__\n")
+        f.write(f"suggestions<<__SUGGESTIONS_EOF__\n{suggestions_json}\n__SUGGESTIONS_EOF__\n")
         f.write(f"doc_pr_url={doc_pr_url}\n")
         f.write(f"status={status}\n")
 

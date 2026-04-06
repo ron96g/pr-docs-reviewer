@@ -47,7 +47,16 @@ echo "Reviewing PR: ${PR_URL}"
 # Fetch base branch so LocalBackend can compute the diff
 # -----------------------------------------------------------------------
 cd "${GITHUB_WORKSPACE}"
-git fetch origin "${GITHUB_BASE_REF}" --depth=1 2>/dev/null || true
+
+# Docker container actions mount the workspace as a different user.
+# Git 2.35.2+ rejects operations on repos owned by other users unless
+# the directory is explicitly marked as safe.
+git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+echo "Fetching base branch: ${GITHUB_BASE_REF}"
+if ! git fetch origin "${GITHUB_BASE_REF}" --depth=1; then
+    echo "::warning::Failed to fetch base branch '${GITHUB_BASE_REF}'. Diff computation may fail."
+fi
 
 # -----------------------------------------------------------------------
 # Run the pipeline via the external driver script

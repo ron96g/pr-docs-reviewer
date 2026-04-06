@@ -175,6 +175,10 @@ def apply_suggestions(
         # Read current file content
         try:
             file_content = backend.read_file(doc_path, ref=branch_name)
+            logger.info(
+                "Read %s (%d chars) for suggestion %d",
+                doc_path, len(file_content), idx,
+            )
         except FileNotFoundError:
             skipped_suggestions.append({
                 "index": idx,
@@ -197,6 +201,11 @@ def apply_suggestions(
         else:
             result = _apply_replacement(file_content, current_text, suggested_text)
             if result is None:
+                logger.warning(
+                    "Suggestion %d: could not locate target text in %s. "
+                    "current_text[:80]=%r, file_content[:200]=%r",
+                    idx, doc_path, current_text[:80], file_content[:200],
+                )
                 skipped_suggestions.append({
                     "index": idx,
                     "doc_path": doc_path,

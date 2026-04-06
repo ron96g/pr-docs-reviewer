@@ -6,6 +6,7 @@ writing results to GitHub Actions outputs.
 
 import asyncio
 import json
+import logging
 import os
 import re
 import sys
@@ -14,6 +15,8 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from pr_docs_reviewer.agent import root_agent
+
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -94,6 +97,12 @@ async def main():
         print(f"Apply result: status={apply_result.get('status')}, "
               f"files_updated={apply_result.get('files_updated', [])}, "
               f"commit_count={apply_result.get('commit_count', 0)}")
+
+        if apply_result.get("skipped_suggestions"):
+            print(f"Skipped suggestions:")
+            for sk in apply_result["skipped_suggestions"]:
+                print(f"  - index {sk.get('index')}: {sk.get('reason')} "
+                      f"(doc_path={sk.get('doc_path', 'N/A')})")
 
         if apply_result.get("doc_pr_url"):
             doc_pr_url = apply_result["doc_pr_url"]

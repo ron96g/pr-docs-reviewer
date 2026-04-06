@@ -17,7 +17,7 @@ inputs:
   model:
     description: "Override the Gemini model used by all agents"
     required: false
-    default: "gemini-3-flash-preview"
+    default: "gemini-2.5-flash"
   docs_path:
     description: "Path to the documentation directory in the repo"
     required: false

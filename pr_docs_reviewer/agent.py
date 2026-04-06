@@ -33,7 +33,7 @@ from .tools import (
 # ---------------------------------------------------------------------------
 # Model configuration — override via environment variables
 # ---------------------------------------------------------------------------
-_DEFAULT_MODEL = "gemini-3-flash-preview"
+_DEFAULT_MODEL = "gemini-2.5-flash"
 
 ANALYZER_MODEL = os.environ.get("PR_DOCS_ANALYZER_MODEL", _DEFAULT_MODEL)
 MAPPER_MODEL = os.environ.get("PR_DOCS_MAPPER_MODEL", _DEFAULT_MODEL)
